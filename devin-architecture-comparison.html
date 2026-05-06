@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Devin Architecture — Scalability Analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ink: #0a0a0c;
+            --paper: #f4f1eb;
+            --devin: #ff3d00;
+            --devin-glow: #ff6d3b;
+            --claude: #5c6bc0;
+            --codex: #78909c;
+            --grid-line: rgba(10, 10, 12, 0.06);
+            --caption: #6b6560;
+            --accent-warm: #e65100;
+            --accent-cool: #263238;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--paper);
+            color: var(--ink);
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Subtle grain texture overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* Grid background */
+        .grid-bg {
+            position: fixed;
+            inset: 0;
+            background-image: 
+                linear-gradient(var(--grid-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+            background-size: 80px 80px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 0 3rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ========== HERO ========== */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 6rem 0;
+            position: relative;
+        }
+
+        .hero-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--caption);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .hero-label::before {
+            content: '';
+            width: 40px;
+            height: 1px;
+            background: var(--devin);
+        }
+
+        .hero h1 {
+            font-family: 'Syne', sans-serif;
+            font-weight: 800;
+            font-size: clamp(3.5rem, 8vw, 7rem);
+            line-height: 0.92;
+            letter-spacing: -0.03em;
+            margin-bottom: 2rem;
+            max-width: 900px;
+        }
+
+        .hero h1 .highlight {
+            color: var(--devin);
+            position: relative;
+            display: inline-block;
+        }
+
+        .hero h1 .highlight::after {
+            content: '';
+            position: absolute;
+            bottom: 0.08em;
+            left: 0;
+            right: 0;
+            height: 0.12em;
+            background: var(--devin);
+            opacity: 0.2;
+            transform: skewX(-12deg);
+        }
+
+        .hero-subtitle {
+            font-size: 1.15rem;
+            color: var(--caption);
+            max-width: 500px;
+            line-height: 1.7;
+            font-weight: 300;
+        }
+
+        .hero-meta {
+            position: absolute;
+            right: 3rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--caption);
+            text-align: right;
+            line-height: 2.2;
+            opacity: 0.6;
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 3rem;
+            left: 3rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--caption);
+            letter-spacing: 0.1em;
+        }
+
+        .scroll-indicator .line {
+            width: 1px;
+            height: 40px;
+            background: var(--ink);
+            animation: scrollPulse 2s ease infinite;
+        }
+
+        @keyframes scrollPulse {
+            0%, 100% { opacity: 0.2; transform: scaleY(0.5); }
+            50% { opacity: 1; transform: scaleY(1); }
+        }
+
+        /* ========== SECTION HEADERS ========== */
+        .section {
+            padding: 8rem 0;
+            border-top: 1px solid rgba(0,0,0,0.08);
+        }
+
+        .section-number {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 0.15em;
+            color: var(--devin);
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+        }
+
+        .section h2 {
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: clamp(2rem, 4vw, 3.2rem);
+            letter-spacing: -0.02em;
+            margin-bottom: 1rem;
+            max-width: 700px;
+        }
+
+        .section-desc {
+            color: var(--caption);
+            font-size: 1rem;
+            max-width: 500px;
+            line-height: 1.7;
+            margin-bottom: 4rem;
+            font-weight: 300;
+        }
+
+        /* ========== ARCHITECTURE DIAGRAMS ========== */
+        .arch-comparison {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr 1fr;
+            gap: 1.5rem;
+            align-items: start;
+        }
+
+        .arch-box {
+            background: white;
+            border: 1px solid rgba(0,0,0,0.08);
+            padding: 2.5rem 2rem;
+            position: relative;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .arch-box:hover {
+            transform: translateY(-4px);
+        }
+
+        .arch-box.primary {
+            border-color: var(--devin);
+            border-width: 2px;
+            box-shadow: 0 20px 60px rgba(255, 61, 0, 0.08);
+        }
+
+        .arch-box .tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            padding: 4px 10px;
+            display: inline-block;
+            margin-bottom: 1.5rem;
+        }
+
+        .arch-box.primary .tag {
+            background: var(--devin);
+            color: white;
+        }
+
+        .arch-box .tag.secondary {
+            background: rgba(0,0,0,0.05);
+            color: var(--caption);
+        }
+
+        .arch-box h3 {
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 1.5rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .arch-box .arch-subtitle {
+            font-size: 0.8rem;
+            color: var(--caption);
+            margin-bottom: 2rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Architecture SVG diagrams */
+        .arch-visual {
+            width: 100%;
+            height: 220px;
+            margin-bottom: 2rem;
+        }
+
+        .arch-list {
+            list-style: none;
+            border-top: 1px solid rgba(0,0,0,0.06);
+            padding-top: 1.5rem;
+        }
+
+        .arch-list li {
+            font-size: 0.82rem;
+            padding: 0.45rem 0;
+            color: var(--ink);
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            line-height: 1.4;
+        }
+
+        .arch-list li .marker {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            margin-top: 0.35rem;
+            flex-shrink: 0;
+        }
+
+        .arch-box.primary .marker { background: var(--devin); }
+        .arch-box:not(.primary) .marker { background: var(--caption); opacity: 0.4; }
+
+        .arch-list li.limitation {
+            color: var(--caption);
+            text-decoration: line-through;
+            text-decoration-color: rgba(0,0,0,0.2);
+        }
+
+        /* ========== METRICS TABLE ========== */
+        .metrics-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .metrics-table thead th {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            padding: 1.5rem 1rem;
+            text-align: left;
+            border-bottom: 2px solid var(--ink);
+            color: var(--caption);
+        }
+
+        .metrics-table thead th:first-child {
+            padding-left: 0;
+        }
+
+        .metrics-table thead th.col-devin {
+            color: var(--devin);
+        }
+
+        .metrics-table tbody td {
+            padding: 1.2rem 1rem;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            font-size: 0.88rem;
+            vertical-align: middle;
+        }
+
+        .metrics-table tbody td:first-child {
+            padding-left: 0;
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+
+        .metric-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .metric-bar .bar {
+            height: 8px;
+            border-radius: 4px;
+            transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .metric-bar .bar.devin { background: var(--devin); }
+        .metric-bar .bar.claude { background: var(--claude); }
+        .metric-bar .bar.codex { background: var(--codex); }
+
+        .metric-bar .label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--caption);
+            white-space: nowrap;
+        }
+
+        /* ========== PARALLELISM SECTION ========== */
+        .parallel-demo {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 3rem;
+        }
+
+        .parallel-row {
+            display: grid;
+            grid-template-columns: 160px 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        .parallel-label {
+            padding-top: 0.5rem;
+        }
+
+        .parallel-label h4 {
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .parallel-label .speed {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--caption);
+        }
+
+        .parallel-label .speed strong {
+            font-size: 1.8rem;
+            font-weight: 700;
+            display: block;
+            margin-top: 0.3rem;
+            line-height: 1;
+        }
+
+        .parallel-label .speed strong.devin-speed { color: var(--devin); }
+        .parallel-label .speed strong.claude-speed { color: var(--claude); }
+        .parallel-label .speed strong.codex-speed { color: var(--codex); }
+
+        .task-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .task-row {
+            display: flex;
+            gap: 2px;
+            height: 28px;
+        }
+
+        .task-block {
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem;
+            font-weight: 500;
+            color: white;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .task-block.devin-task {
+            background: var(--devin);
+            flex: 1;
+        }
+
+        .task-block.claude-task {
+            background: var(--claude);
+        }
+
+        .task-block.claude-task.active {
+            flex: 1;
+        }
+
+        .task-block.claude-task.queued {
+            flex: 0.3;
+            background: transparent;
+            border: 1px dashed var(--claude);
+            color: var(--claude);
+            opacity: 0.4;
+        }
+
+        .task-block.codex-task {
+            background: var(--codex);
+        }
+
+        .task-block.codex-task.active {
+            flex: 0.6;
+        }
+
+        .task-block.codex-task.limited {
+            flex: 0.3;
+            background: transparent;
+            border: 1px dashed var(--codex);
+            color: var(--codex);
+            opacity: 0.4;
+        }
+
+        /* Running animation stripe */
+        .task-block.running::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                -45deg,
+                transparent,
+                transparent 4px,
+                rgba(255,255,255,0.1) 4px,
+                rgba(255,255,255,0.1) 8px
+            );
+            animation: stripeMove 1s linear infinite;
+        }
+
+        @keyframes stripeMove {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(11px); }
+        }
+
+        /* ========== TIMELINE SECTION ========== */
+        .workflow-timeline {
+            position: relative;
+            padding: 2rem 0;
+        }
+
+        .wf-row {
+            display: grid;
+            grid-template-columns: 140px 1fr;
+            gap: 2rem;
+            margin-bottom: 2.5rem;
+            align-items: center;
+        }
+
+        .wf-label {
+            font-family: 'Syne', sans-serif;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .wf-track {
+            height: 48px;
+            background: rgba(0,0,0,0.02);
+            border: 1px solid rgba(0,0,0,0.05);
+            border-radius: 6px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 6px;
+            gap: 4px;
+            overflow: hidden;
+        }
+
+        .wf-block {
+            height: 36px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem;
+            font-weight: 500;
+            color: white;
+            white-space: nowrap;
+            padding: 0 10px;
+        }
+
+        .wf-block.devin-wf { background: var(--devin); }
+        .wf-block.claude-wf { background: var(--claude); }
+        .wf-block.codex-wf { background: var(--codex); }
+        .wf-block.idle-wf {
+            background: transparent;
+            border: 1px dashed rgba(0,0,0,0.15);
+            color: var(--caption);
+        }
+        .wf-block.blocked-wf {
+            background: #d32f2f;
+        }
+        .wf-block.done-wf {
+            background: #2e7d32;
+        }
+
+        /* ========== INSIGHTS ========== */
+        .insights-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+
+        .insight-card {
+            background: white;
+            border: 1px solid rgba(0,0,0,0.06);
+            padding: 2.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+
+        .insight-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .insight-card::before {
+            content: attr(data-num);
+            position: absolute;
+            top: -20px;
+            right: 20px;
+            font-family: 'Syne', sans-serif;
+            font-size: 6rem;
+            font-weight: 800;
+            color: var(--devin);
+            opacity: 0.06;
+            line-height: 1;
+        }
+
+        .insight-card h4 {
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 1.15rem;
+            margin-bottom: 0.75rem;
+            color: var(--ink);
+        }
+
+        .insight-card p {
+            font-size: 0.88rem;
+            color: var(--caption);
+            line-height: 1.7;
+        }
+
+        /* ========== BOTTOM CTA ========== */
+        .conclusion {
+            text-align: center;
+            padding: 8rem 0;
+            border-top: 1px solid rgba(0,0,0,0.08);
+        }
+
+        .conclusion .big-number {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(4rem, 10vw, 8rem);
+            font-weight: 800;
+            color: var(--devin);
+            line-height: 1;
+            margin-bottom: 1rem;
+        }
+
+        .conclusion p {
+            font-size: 1.1rem;
+            color: var(--caption);
+            max-width: 500px;
+            margin: 0 auto;
+            line-height: 1.7;
+        }
+
+        /* ========== FOOTER ========== */
+        footer {
+            padding: 3rem 0;
+            border-top: 1px solid rgba(0,0,0,0.06);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--caption);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* ========== ANIMATIONS ========== */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), 
+                        transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .stagger-1 { transition-delay: 0.1s; }
+        .stagger-2 { transition-delay: 0.2s; }
+        .stagger-3 { transition-delay: 0.3s; }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .arch-comparison { grid-template-columns: 1fr; }
+            .parallel-row { grid-template-columns: 1fr; }
+            .wf-row { grid-template-columns: 1fr; }
+            .insights-grid { grid-template-columns: 1fr; }
+            .hero-meta { display: none; }
+            .container { padding: 0 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-bg"></div>
+    
+    <div class="container">
+        <!-- HERO -->
+        <section class="hero">
+            <div class="hero-label">Architecture Analysis / 2025</div>
+            <h1>
+                Why Devin is<br>
+                <span class="highlight">fundamentally</span><br>
+                more scalable.
+            </h1>
+            <p class="hero-subtitle">
+                A structural comparison of execution models. Not incremental improvements — architectural divergence that compounds at scale.
+            </p>
+            <div class="hero-meta">
+                DEVIN — Full VM Agent<br>
+                CLAUDE CODE — Local CLI<br>
+                OPENAI CODEX — Cloud Sandbox<br>
+                <br>
+                Dimensions: 6<br>
+                Verdict: Non-linear advantage
+            </div>
+            <div class="scroll-indicator">
+                <div class="line"></div>
+                SCROLL
+            </div>
+        </section>
+
+        <!-- SECTION 01: Architecture -->
+        <section class="section">
+            <div class="section-number">01 — Execution Architecture</div>
+            <h2 class="reveal">Three models.<br>One scales.</h2>
+            <p class="section-desc reveal stagger-1">Each product embodies a fundamentally different philosophy about where and how code gets written.</p>
+            
+            <div class="arch-comparison">
+                <!-- Devin -->
+                <div class="arch-box primary reveal stagger-1">
+                    <span class="tag">Recommended</span>
+                    <h3>Devin</h3>
+                    <div class="arch-subtitle">Autonomous Agent + Dedicated VM</div>
+                    <svg class="arch-visual" viewBox="0 0 320 220">
+                        <!-- Orchestrator -->
+                        <rect x="10" y="5" width="300" height="36" rx="4" fill="none" stroke="#ff3d00" stroke-width="1.5" stroke-dasharray="4"/>
+                        <text x="160" y="27" text-anchor="middle" fill="#ff3d00" font-family="JetBrains Mono, monospace" font-size="9" font-weight="500">ORCHESTRATOR</text>
+                        
+                        <!-- Connection lines -->
+                        <line x1="60" y1="41" x2="60" y2="60" stroke="#ff3d00" stroke-width="1" opacity="0.4"/>
+                        <line x1="160" y1="41" x2="160" y2="60" stroke="#ff3d00" stroke-width="1" opacity="0.4"/>
+                        <line x1="260" y1="41" x2="260" y2="60" stroke="#ff3d00" stroke-width="1" opacity="0.4"/>
+                        
+                        <!-- VM 1 (expanded) -->
+                        <rect x="10" y="60" width="100" height="150" rx="3" fill="#fff5f2" stroke="#ff3d00" stroke-width="1.5"/>
+                        <rect x="10" y="60" width="100" height="22" rx="3" fill="#ff3d00"/>
+                        <text x="60" y="75" text-anchor="middle" fill="white" font-family="JetBrains Mono, monospace" font-size="7.5" font-weight="500">VM SESSION 01</text>
+                        
+                        <rect x="18" y="90" width="84" height="16" rx="2" fill="#ffccbc"/>
+                        <text x="60" y="101" text-anchor="middle" fill="#bf360c" font-family="JetBrains Mono, monospace" font-size="7">SHELL + FS</text>
+                        <rect x="18" y="112" width="84" height="16" rx="2" fill="#ffccbc"/>
+                        <text x="60" y="123" text-anchor="middle" fill="#bf360c" font-family="JetBrains Mono, monospace" font-size="7">BROWSER</text>
+                        <rect x="18" y="134" width="84" height="16" rx="2" fill="#ffccbc"/>
+                        <text x="60" y="145" text-anchor="middle" fill="#bf360c" font-family="JetBrains Mono, monospace" font-size="7">EDITOR + GIT</text>
+                        <rect x="18" y="156" width="84" height="16" rx="2" fill="#ffccbc"/>
+                        <text x="60" y="167" text-anchor="middle" fill="#bf360c" font-family="JetBrains Mono, monospace" font-size="7">CI/CD + APIs</text>
+                        <rect x="18" y="178" width="84" height="16" rx="2" fill="#ffccbc"/>
+                        <text x="60" y="189" text-anchor="middle" fill="#bf360c" font-family="JetBrains Mono, monospace" font-size="7">MCP INTEGRATIONS</text>
+                        
+                        <!-- VM 2 -->
+                        <rect x="120" y="60" width="80" height="90" rx="3" fill="#fff5f2" stroke="#ff3d00" stroke-width="1" opacity="0.7"/>
+                        <rect x="120" y="60" width="80" height="18" rx="3" fill="#ff3d00" opacity="0.7"/>
+                        <text x="160" y="73" text-anchor="middle" fill="white" font-family="JetBrains Mono, monospace" font-size="7">SESSION 02</text>
+                        <rect x="127" y="84" width="66" height="12" rx="2" fill="#ffccbc" opacity="0.6"/>
+                        <rect x="127" y="100" width="66" height="12" rx="2" fill="#ffccbc" opacity="0.6"/>
+                        <rect x="127" y="116" width="66" height="12" rx="2" fill="#ffccbc" opacity="0.6"/>
+                        
+                        <!-- VM 3 -->
+                        <rect x="210" y="60" width="80" height="90" rx="3" fill="#fff5f2" stroke="#ff3d00" stroke-width="1" opacity="0.5"/>
+                        <rect x="210" y="60" width="80" height="18" rx="3" fill="#ff3d00" opacity="0.5"/>
+                        <text x="250" y="73" text-anchor="middle" fill="white" font-family="JetBrains Mono, monospace" font-size="7">SESSION 03</text>
+                        <rect x="217" y="84" width="66" height="12" rx="2" fill="#ffccbc" opacity="0.4"/>
+                        <rect x="217" y="100" width="66" height="12" rx="2" fill="#ffccbc" opacity="0.4"/>
+                        <rect x="217" y="116" width="66" height="12" rx="2" fill="#ffccbc" opacity="0.4"/>
+                        
+                        <!-- Ellipsis -->
+                        <text x="250" y="180" text-anchor="middle" fill="#ff3d00" font-family="JetBrains Mono, monospace" font-size="9" opacity="0.6">+ N sessions</text>
+                        <text x="250" y="195" text-anchor="middle" fill="#ff3d00" font-family="JetBrains Mono, monospace" font-size="7.5" opacity="0.4">horizontal scale</text>
+                    </svg>
+                    <ul class="arch-list">
+                        <li><span class="marker"></span>Dedicated VM with full OS per session</li>
+                        <li><span class="marker"></span>Persistent shell, browser, editor, filesystem</li>
+                        <li><span class="marker"></span>Unlimited concurrent sessions</li>
+                        <li><span class="marker"></span>Child sessions for sub-task parallelism</li>
+                        <li><span class="marker"></span>Full internet + external service access</li>
+                        <li><span class="marker"></span>Asynchronous — works while you sleep</li>
+                    </ul>
+                </div>
+
+                <!-- Claude Code -->
+                <div class="arch-box reveal stagger-2">
+                    <span class="tag secondary">Local CLI</span>
+                    <h3>Claude Code</h3>
+                    <div class="arch-subtitle">Terminal-bound agent</div>
+                    <svg class="arch-visual" viewBox="0 0 240 220">
+                        <!-- User machine boundary -->
+                        <rect x="10" y="10" width="220" height="200" rx="3" fill="#f5f5ff" stroke="#5c6bc0" stroke-width="1" stroke-dasharray="6"/>
+                        <text x="120" y="30" text-anchor="middle" fill="#5c6bc0" font-family="JetBrains Mono, monospace" font-size="8" opacity="0.6">USER'S MACHINE</text>
+                        
+                        <!-- Terminal box -->
+                        <rect x="30" y="45" width="180" height="145" rx="3" fill="white" stroke="#5c6bc0" stroke-width="1.5"/>
+                        <rect x="30" y="45" width="180" height="20" rx="3" fill="#5c6bc0"/>
+                        <text x="120" y="59" text-anchor="middle" fill="white" font-family="JetBrains Mono, monospace" font-size="7.5">TERMINAL (BLOCKED)</text>
+                        
+                        <!-- Single process -->
+                        <rect x="45" y="78" width="150" height="24" rx="2" fill="#e8eaf6"/>
+                        <text x="120" y="94" text-anchor="middle" fill="#283593" font-family="JetBrains Mono, monospace" font-size="7.5">claude-code process</text>
+                        
+                        <!-- Tools -->
+                        <rect x="45" y="112" width="70" height="18" rx="2" fill="#c5cae9"/>
+                        <text x="80" y="124" text-anchor="middle" fill="#1a237e" font-family="JetBrains Mono, monospace" font-size="6.5">read/write</text>
+                        <rect x="125" y="112" width="70" height="18" rx="2" fill="#c5cae9"/>
+                        <text x="160" y="124" text-anchor="middle" fill="#1a237e" font-family="JetBrains Mono, monospace" font-size="6.5">shell cmd</text>
+                        
+                        <!-- Blocked indicator -->
+                        <rect x="45" y="145" width="150" height="30" rx="2" fill="none" stroke="#d32f2f" stroke-width="1" stroke-dasharray="3"/>
+                        <text x="120" y="163" text-anchor="middle" fill="#d32f2f" font-family="JetBrains Mono, monospace" font-size="7">USER WAITING...</text>
+                    </svg>
+                    <ul class="arch-list">
+                        <li><span class="marker"></span>Runs in user's terminal session</li>
+                        <li><span class="marker"></span>Single process, single thread</li>
+                        <li><span class="marker"></span>Blocks terminal while executing</li>
+                        <li class="limitation"><span class="marker"></span>No persistent state</li>
+                        <li class="limitation"><span class="marker"></span>No browser interaction</li>
+                        <li class="limitation"><span class="marker"></span>No background execution</li>
+                    </ul>
+                </div>
+
+                <!-- Codex -->
+                <div class="arch-box reveal stagger-3">
+                    <span class="tag secondary">Cloud Sandbox</span>
+                    <h3>OpenAI Codex</h3>
+                    <div class="arch-subtitle">Restricted container</div>
+                    <svg class="arch-visual" viewBox="0 0 240 220">
+                        <!-- Cloud boundary -->
+                        <rect x="10" y="10" width="220" height="200" rx="3" fill="#f1f8f4" stroke="#78909c" stroke-width="1" stroke-dasharray="6"/>
+                        <text x="120" y="30" text-anchor="middle" fill="#78909c" font-family="JetBrains Mono, monospace" font-size="8" opacity="0.6">CLOUD SANDBOX</text>
+                        
+                        <!-- Container -->
+                        <rect x="30" y="45" width="180" height="100" rx="3" fill="white" stroke="#78909c" stroke-width="1.5"/>
+                        <rect x="30" y="45" width="180" height="20" rx="3" fill="#78909c"/>
+                        <text x="120" y="59" text-anchor="middle" fill="white" font-family="JetBrains Mono, monospace" font-size="7.5">CONTAINER</text>
+                        
+                        <rect x="45" y="75" width="150" height="16" rx="2" fill="#eceff1"/>
+                        <text x="120" y="86" text-anchor="middle" fill="#37474f" font-family="JetBrains Mono, monospace" font-size="6.5">shell (limited)</text>
+                        <rect x="45" y="97" width="150" height="16" rx="2" fill="#eceff1"/>
+                        <text x="120" y="108" text-anchor="middle" fill="#37474f" font-family="JetBrains Mono, monospace" font-size="6.5">file system</text>
+                        <rect x="45" y="119" width="150" height="16" rx="2" fill="#eceff1"/>
+                        <text x="120" y="130" text-anchor="middle" fill="#37474f" font-family="JetBrains Mono, monospace" font-size="6.5">code execution</text>
+                        
+                        <!-- Blocked areas -->
+                        <rect x="30" y="158" width="85" height="35" rx="2" fill="none" stroke="#d32f2f" stroke-width="1" stroke-dasharray="3"/>
+                        <line x1="30" y1="158" x2="115" y2="193" stroke="#d32f2f" stroke-width="0.5" opacity="0.5"/>
+                        <text x="72" y="178" text-anchor="middle" fill="#d32f2f" font-family="JetBrains Mono, monospace" font-size="6.5">NO INTERNET</text>
+                        
+                        <rect x="125" y="158" width="85" height="35" rx="2" fill="none" stroke="#d32f2f" stroke-width="1" stroke-dasharray="3"/>
+                        <line x1="125" y1="158" x2="210" y2="193" stroke="#d32f2f" stroke-width="0.5" opacity="0.5"/>
+                        <text x="167" y="178" text-anchor="middle" fill="#d32f2f" font-family="JetBrains Mono, monospace" font-size="6.5">NO BROWSER</text>
+                    </svg>
+                    <ul class="arch-list">
+                        <li><span class="marker"></span>Cloud sandbox with basic tools</li>
+                        <li><span class="marker"></span>Can run asynchronously</li>
+                        <li class="limitation"><span class="marker"></span>No internet access by default</li>
+                        <li class="limitation"><span class="marker"></span>No browser / GUI</li>
+                        <li class="limitation"><span class="marker"></span>No CI/CD integration</li>
+                        <li class="limitation"><span class="marker"></span>Limited external services</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 02: Scalability Metrics -->
+        <section class="section">
+            <div class="section-number">02 — Scalability Dimensions</div>
+            <h2 class="reveal">The gap widens<br>under every metric.</h2>
+            <p class="section-desc reveal stagger-1">Six dimensions where architectural choices create compounding advantages.</p>
+
+            <table class="metrics-table reveal stagger-2">
+                <thead>
+                    <tr>
+                        <th style="width: 180px;">Dimension</th>
+                        <th class="col-devin" style="width: 30%;">Devin</th>
+                        <th style="width: 30%;">Claude Code</th>
+                        <th style="width: 30%;">OpenAI Codex</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Concurrent Tasks</td>
+                        <td><div class="metric-bar"><div class="bar devin" style="width: 140px;"></div><span class="label">Unlimited</span></div></td>
+                        <td><div class="metric-bar"><div class="bar claude" style="width: 14px;"></div><span class="label">1</span></div></td>
+                        <td><div class="metric-bar"><div class="bar codex" style="width: 42px;"></div><span class="label">~3</span></div></td>
+                    </tr>
+                    <tr>
+                        <td>Environment Isolation</td>
+                        <td><div class="metric-bar"><div class="bar devin" style="width: 140px;"></div><span class="label">Full VM</span></div></td>
+                        <td><div class="metric-bar"><div class="bar claude" style="width: 10px;"></div><span class="label">None</span></div></td>
+                        <td><div class="metric-bar"><div class="bar codex" style="width: 84px;"></div><span class="label">Container</span></div></td>
+                    </tr>
+                    <tr>
+                        <td>Tool Breadth</td>
+                        <td><div class="metric-bar"><div class="bar devin" style="width: 140px;"></div><span class="label">Full stack</span></div></td>
+                        <td><div class="metric-bar"><div class="bar claude" style="width: 56px;"></div><span class="label">FS + Shell</span></div></td>
+                        <td><div class="metric-bar"><div class="bar codex" style="width: 42px;"></div><span class="label">Limited</span></div></td>
+                    </tr>
+                    <tr>
+                        <td>Network Access</td>
+                        <td><div class="metric-bar"><div class="bar devin" style="width: 140px;"></div><span class="label">Full internet</span></div></td>
+                        <td><div class="metric-bar"><div class="bar claude" style="width: 70px;"></div><span class="label">Via user</span></div></td>
+                        <td><div class="metric-bar"><div class="bar codex" style="width: 10px;"></div><span class="label">Disabled</span></div></td>
+                    </tr>
+                    <tr>
+                        <td>Task Duration</td>
+                        <td><div class="metric-bar"><div class="bar devin" style="width: 140px;"></div><span class="label">Hours+</span></div></td>
+                        <td><div class="metric-bar"><div class="bar claude" style="width: 50px;"></div><span class="label">Minutes</span></div></td>
+                        <td><div class="metric-bar"><div class="bar codex" style="width: 50px;"></div><span class="label">Minutes</span></div></td>
+                    </tr>
+                    <tr>
+                        <td>State Persistence</td>
+                        <td><div class="metric-bar"><div class="bar devin" style="width: 140px;"></div><span class="label">Persistent</span></div></td>
+                        <td><div class="metric-bar"><div class="bar claude" style="width: 14px;"></div><span class="label">Ephemeral</span></div></td>
+                        <td><div class="metric-bar"><div class="bar codex" style="width: 35px;"></div><span class="label">Session only</span></div></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- SECTION 03: Parallelism -->
+        <section class="section">
+            <div class="section-number">03 — Throughput Under Load</div>
+            <h2 class="reveal">10 tasks arrive.<br>What happens next?</h2>
+            <p class="section-desc reveal stagger-1">The architectural ceiling becomes visible immediately under concurrent load.</p>
+
+            <div class="parallel-demo reveal stagger-2">
+                <!-- Devin -->
+                <div class="parallel-row">
+                    <div class="parallel-label">
+                        <h4>Devin</h4>
+                        <div class="speed">
+                            Throughput
+                            <strong class="devin-speed">10x</strong>
+                        </div>
+                    </div>
+                    <div class="task-timeline">
+                        <div class="task-row">
+                            <div class="task-block devin-task running">Task 01 — Feature A</div>
+                        </div>
+                        <div class="task-row">
+                            <div class="task-block devin-task running">Task 02 — Bug fix</div>
+                        </div>
+                        <div class="task-row">
+                            <div class="task-block devin-task running">Task 03 — Refactor</div>
+                        </div>
+                        <div class="task-row">
+                            <div class="task-block devin-task running">Task 04 — Tests</div>
+                        </div>
+                        <div class="task-row">
+                            <div class="task-block devin-task running">Task 05 — Docs</div>
+                        </div>
+                        <div class="task-row">
+                            <div class="task-block devin-task running">Task 06 — Migration</div>
+                        </div>
+                        <div class="task-row">
+                            <div class="task-block devin-task running">Task 07 — API endpoint</div>
+                        </div>
+                        <div class="task-row">
+                            <div class="task-block devin-task running">Task 08 — CI fix</div>
+                        </div>
+                        <div class="task-row">
+                            <div class="task-block devin-task running">Task 09 — Dependency update</div>
+                        </div>
+                        <div class="task-row">
+                            <div class="task-block devin-task running">Task 10 — Security patch</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Claude Code -->
+                <div class="parallel-row">
+                    <div class="parallel-label">
+                        <h4>Claude Code</h4>
+                        <div class="speed">
+                            Throughput
+                            <strong class="claude-speed">1x</strong>
+                        </div>
+                    </div>
+                    <div class="task-timeline">
+                        <div class="task-row">
+                            <div class="task-block claude-task active running">Task 01 — Feature A</div>
+                            <div class="task-block claude-task queued">02</div>
+                            <div class="task-block claude-task queued">03</div>
+                            <div class="task-block claude-task queued">04</div>
+                            <div class="task-block claude-task queued">05</div>
+                            <div class="task-block claude-task queued">06</div>
+                            <div class="task-block claude-task queued">07</div>
+                            <div class="task-block claude-task queued">08</div>
+                            <div class="task-block claude-task queued">09</div>
+                            <div class="task-block claude-task queued">10</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Codex -->
+                <div class="parallel-row">
+                    <div class="parallel-label">
+                        <h4>Codex</h4>
+                        <div class="speed">
+                            Throughput
+                            <strong class="codex-speed">~3x</strong>
+                        </div>
+                    </div>
+                    <div class="task-timeline">
+                        <div class="task-row">
+                            <div class="task-block codex-task active running">Task 01</div>
+                            <div class="task-block codex-task active running">Task 02</div>
+                            <div class="task-block codex-task active running">Task 03</div>
+                            <div class="task-block codex-task limited">04</div>
+                            <div class="task-block codex-task limited">05</div>
+                            <div class="task-block codex-task limited">06</div>
+                            <div class="task-block codex-task limited">07</div>
+                            <div class="task-block codex-task limited">08</div>
+                            <div class="task-block codex-task limited">09</div>
+                            <div class="task-block codex-task limited">10</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 04: Workflow Timeline -->
+        <section class="section">
+            <div class="section-number">04 — End-to-End Workflow</div>
+            <h2 class="reveal">Complete lifecycle,<br>zero handoffs.</h2>
+            <p class="section-desc reveal stagger-1">A complex task: build feature → run tests → fix CI → deploy. Watch where each system stalls.</p>
+
+            <div class="workflow-timeline reveal stagger-2">
+                <div class="wf-row">
+                    <div class="wf-label" style="color: var(--devin);">Devin</div>
+                    <div class="wf-track">
+                        <div class="wf-block devin-wf" style="flex: 2.5;">Build</div>
+                        <div class="wf-block devin-wf" style="flex: 1.8;">Test</div>
+                        <div class="wf-block devin-wf" style="flex: 2;">Fix CI</div>
+                        <div class="wf-block devin-wf" style="flex: 1.5;">Deploy</div>
+                        <div class="wf-block done-wf" style="flex: 1.2;">Done</div>
+                    </div>
+                </div>
+                <div class="wf-row">
+                    <div class="wf-label" style="color: var(--claude);">Claude Code</div>
+                    <div class="wf-track">
+                        <div class="wf-block claude-wf" style="flex: 2.5;">Build</div>
+                        <div class="wf-block idle-wf" style="flex: 1;">Wait</div>
+                        <div class="wf-block claude-wf" style="flex: 1.5;">Test</div>
+                        <div class="wf-block idle-wf" style="flex: 0.8;">Wait</div>
+                        <div class="wf-block claude-wf" style="flex: 1.5;">Fix</div>
+                        <div class="wf-block idle-wf" style="flex: 0.8;">Wait</div>
+                        <div class="wf-block claude-wf" style="flex: 0.9;">...</div>
+                    </div>
+                </div>
+                <div class="wf-row">
+                    <div class="wf-label" style="color: var(--codex);">Codex</div>
+                    <div class="wf-track">
+                        <div class="wf-block codex-wf" style="flex: 2.5;">Build</div>
+                        <div class="wf-block codex-wf" style="flex: 1.5;">Test (local)</div>
+                        <div class="wf-block blocked-wf" style="flex: 2;">Can't reach CI</div>
+                        <div class="wf-block blocked-wf" style="flex: 2;">Can't deploy</div>
+                        <div class="wf-block idle-wf" style="flex: 1.5;">Blocked</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 05: Key Insights -->
+        <section class="section">
+            <div class="section-number">05 — Structural Advantages</div>
+            <h2 class="reveal">The compound effects<br>of full ownership.</h2>
+            <p class="section-desc reveal stagger-1">These aren't feature differences. They're architectural ceilings that competitors cannot overcome without rebuilding.</p>
+
+            <div class="insights-grid">
+                <div class="insight-card reveal stagger-1" data-num="01">
+                    <h4>Horizontal Parallelism</h4>
+                    <p>Each session runs on its own VM. 100 tasks? 100 VMs. No shared resource bottleneck, no contention. Claude Code is architecturally limited to one task per developer terminal — that ceiling is permanent.</p>
+                </div>
+                <div class="insight-card reveal stagger-2" data-num="02">
+                    <h4>Full Environment Ownership</h4>
+                    <p>Complete OS-level control means no permission conflicts, no dependency collisions, and deterministic reproducibility. Codex's restricted container can't install system packages or reach production services.</p>
+                </div>
+                <div class="insight-card reveal stagger-3" data-num="03">
+                    <h4>Asynchronous by Default</h4>
+                    <p>Devin works while you sleep. It waits for CI, monitors deploys, and iterates without human presence. This eliminates the single biggest throughput bottleneck: human availability as a serialization point.</p>
+                </div>
+                <div class="insight-card reveal" data-num="04" style="transition-delay: 0.4s;">
+                    <h4>End-to-End Lifecycle</h4>
+                    <p>Code → test → CI → deploy → monitor. No handoffs back to the user at critical junctures. Each handoff in competitor architectures introduces hours of latency and context switching cost.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Conclusion -->
+        <section class="conclusion reveal">
+            <div class="big-number">∞:1</div>
+            <p>Devin's architecture doesn't just perform better — it removes the ceiling entirely. The question isn't "how much faster" but "how many tasks can run simultaneously."</p>
+        </section>
+    </div>
+
+    <footer>
+        <div class="container" style="display:flex; justify-content:space-between; width:100%;">
+            <span>Architecture analysis — Cognition AI</span>
+            <span>Based on public documentation, May 2025</span>
+        </div>
+    </footer>
+
+    <script>
+        // Intersection Observer for reveals
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.15, rootMargin: '0px 0px -50px 0px' });
+
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+    </script>
+</body>
+</html>
